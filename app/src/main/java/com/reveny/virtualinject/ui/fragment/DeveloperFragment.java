@@ -2,6 +2,7 @@ package com.reveny.virtualinject.ui.fragment;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
@@ -34,8 +35,9 @@ public class DeveloperFragment extends BaseFragment {
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         binding = FragmentDeveloperBinding.inflate(inflater, container, false);
-        setupToolbar(binding.toolbar, null, "Developer Tools", 0);
-        
+        // Perbaikan: gunakan overload yang menerima String title
+        setupToolbar(binding.toolbar, null, "Developer Tools", 0, null);
+
         setupAppList();
 
         binding.libPathChoose.setEndIconOnClickListener(v -> {
@@ -58,10 +60,11 @@ public class DeveloperFragment extends BaseFragment {
     }
 
     private void setupAppList() {
-        List<com.vcore.entity.pm.InstalledPackage> installed = BlackBoxCore.get().getBPackageManager().getInstalledPackages(0, 0);
+        // Perbaikan: getInstalledPackages me-return List<PackageInfo>
+        List<PackageInfo> installed = BlackBoxCore.get().getInstalledPackages(0, 0);
         List<String> pkgNames = new ArrayList<>();
-        for (com.vcore.entity.pm.InstalledPackage pkg : installed) {
-            pkgNames.add(pkg.packageName);
+        for (PackageInfo info : installed) {
+            pkgNames.add(info.packageName);
         }
 
         ArrayAdapter<String> adapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_dropdown_item_1line, pkgNames);
