@@ -5,7 +5,7 @@ import java.util.Locale;
 import com.vcore.BlackBoxCore;
 
 public class ProxyManifest {
-    public static final int FREE_COUNT = 50;
+    public static final int FREE_COUNT = 10;
 
     public static boolean isProxy(String msg) {
         return getBindProvider().equals(msg) || msg.contains("proxy_content_provider_");

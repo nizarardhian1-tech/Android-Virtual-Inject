@@ -1,57 +1,42 @@
 package com.reveny.virtualinject.ui.fragment;
 
-import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.Dialog;
-import android.net.Uri;
+import android.content.pm.ApplicationInfo;
 import android.os.Bundle;
-import android.os.Environment;
 import android.text.method.LinkMovementMethod;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ArrayAdapter;
 import android.widget.Toast;
-import android.content.Intent;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.text.HtmlCompat;
 import androidx.fragment.app.DialogFragment;
+import androidx.recyclerview.widget.GridLayoutManager;
 
 import com.reveny.virtualinject.BuildConfig;
 import com.reveny.virtualinject.R;
 import com.reveny.virtualinject.databinding.DialogAboutBinding;
 import com.reveny.virtualinject.databinding.FragmentHomeBinding;
+import com.reveny.virtualinject.model.VirtualApp;
+import com.reveny.virtualinject.ui.adapter.VirtualAppAdapter;
 import com.reveny.virtualinject.ui.dialog.BlurBehindDialogBuilder;
-import com.reveny.virtualinject.util.Utility;
 import com.reveny.virtualinject.util.chrome.LinkTransformationMethod;
 import com.vcore.BlackBoxCore;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 import rikka.material.app.LocaleDelegate;
 
 public class HomeFragment extends BaseFragment {
-    private static final String TAG = "VirtualInjectLog";
-
-    private String selectedApp;
-    private String libraryPath;
-
     private FragmentHomeBinding binding;
-
-    @Override
-    public void onCreate(@Nullable Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-    }
+    private VirtualAppAdapter adapter;
+    private List<VirtualApp> virtualApps = new ArrayList<>();
 
     @Override
     public void onPrepareOptionsMenu(Menu menu) {
@@ -62,129 +47,122 @@ public class HomeFragment extends BaseFragment {
     }
 
     @Override
-    public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-
-        if (requestCode != 1 || resultCode != Activity.RESULT_OK) {
-            return;
-        }
-
-        if (data == null || data.getData() == null) {
-            Toast.makeText(getActivity(), "File selection failed", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        Uri fileUri = data.getData();
-
-        if (fileUri != null && fileUri.getPath() != null && fileUri.getPath().endsWith(".so")) {
-            libraryPath = Objects.requireNonNull(fileUri.getPath()).replace("/document/primary:", Environment.getExternalStorageDirectory().getPath() + "/");
-            Toast.makeText(getActivity(), "File Selected: " + libraryPath, Toast.LENGTH_LONG).show();
-
-            // Define destination file in cache directory
-            File dest = new File(requireContext().getCacheDir(), "libinject.so");
-
-            try (InputStream inputStream = requireContext().getContentResolver().openInputStream(fileUri);
-                 OutputStream outputStream = new FileOutputStream(dest)) {
-
-                // Copy the file content from InputStream to OutputStream
-                byte[] buffer = new byte[1024];
-                int bytesRead;
-                while ((bytesRead = inputStream.read(buffer)) != -1) {
-                    outputStream.write(buffer, 0, bytesRead);
-                }
-
-                Log.i(TAG, "Copied library file to: " + dest.getAbsolutePath());
-                binding.libPath.setText(libraryPath);
-
-            } catch (IOException e) {
-                Log.e(TAG, "Failed to copy library file", e);
-                Toast.makeText(getActivity(), "Failed to copy library file", Toast.LENGTH_SHORT).show();
-                e.printStackTrace();
-            }
-        } else {
-            Toast.makeText(getActivity(), "Invalid file type selected. Please select a .so or .dex file.", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         binding = FragmentHomeBinding.inflate(inflater, container, false);
         setupToolbar(binding.toolbar, null, R.string.app_name, R.menu.menu_home);
         binding.toolbar.setNavigationIcon(null);
-        binding.toolbar.setOnClickListener(null);
         binding.appBar.setLiftable(true);
-        binding.nestedScrollView.getBorderViewDelegate().setBorderVisibilityChangedListener((top, oldTop, bottom, oldBottom) -> binding.appBar.setLifted(!top));
+        
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM);
 
-        setupApplist();
+        setupRecyclerView();
+        loadVirtualApps();
 
-        binding.libPathChoose.setEndIconOnClickListener(v -> {
-            Intent chooseFile = new Intent(Intent.ACTION_GET_CONTENT);
-            chooseFile.setType("*/*");
-
-            // For .so
-            chooseFile.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/octet-stream"});
-            chooseFile = Intent.createChooser(chooseFile, "Choose a .so file");
-            startActivityForResult(chooseFile, 1);
-        });
-
-        binding.installButton.setOnClickListener(v -> {
-            if (selectedApp != null) {
-                Log.i(TAG, "Installing: " + selectedApp);
-                BlackBoxCore.get().installPackageAsUser(selectedApp, 0);
-
-                boolean isInstalled = BlackBoxCore.get().isInstalled(selectedApp, 0);
-                Log.i(TAG, "isInstalled: " + isInstalled);
-                if (!isInstalled) {
-                    Toast.makeText(requireContext(), "Failed to install", Toast.LENGTH_SHORT).show();
-                }
-
-                Toast.makeText(requireContext(), "Installed", Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(requireContext(), "Please select an app", Toast.LENGTH_SHORT).show();
-            }
-        });
-
-        binding.launchButton.setOnClickListener(v -> {
-            if (selectedApp != null && libraryPath != null) {
-                boolean isInstalled = BlackBoxCore.get().isInstalled(selectedApp, 0);
-                if (!isInstalled) {
-                    Toast.makeText(requireContext(), "Please install the app first", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                Log.i(TAG, "Launching: " + selectedApp);
-                BlackBoxCore.get().launchApk(selectedApp, 0);
-            } else {
-                Toast.makeText(requireContext(), "Please select a valid app and library path", Toast.LENGTH_SHORT).show();
-            }
-        });
+        binding.fabAdd.setOnClickListener(v -> showInstallDialog());
 
         return binding.getRoot();
     }
 
-    private void setupApplist() {
-        List<String> installedApps = Utility.getInstalledApps(requireContext());
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(
-            requireContext(),
-            android.R.layout.simple_dropdown_item_1line,
-            installedApps
-        );
-        binding.appSelectorText.setAdapter(adapter);
+    private int titleClickCount = 0;
+    private long lastClickTime = 0;
 
-        binding.appSelectorText.setOnItemClickListener((parent, view, position, id) -> {
-            String selected = (String) parent.getItemAtPosition(position);
-            selectedApp = selected;
-            Log.i(TAG, "Selected: " + selected);
-        });
-        binding.appSelectorText.setOnFocusChangeListener((view, hasFocus) -> {
-            if (hasFocus) return;
+    private void setupSecretGesture() {
+        binding.toolbar.setOnClickListener(v -> {
+            long currentTime = System.currentTimeMillis();
+            if (currentTime - lastClickTime < 500) {
+                titleClickCount++;
+            } else {
+                titleClickCount = 1;
+            }
+            lastClickTime = currentTime;
 
-            String currText = binding.appSelectorText.getText().toString();
-            if (installedApps.stream().noneMatch(c -> c.equals(currText))) {
-                binding.appSelectorText.setText("");
-                selectedApp = null;
+            if (titleClickCount >= 7) {
+                titleClickCount = 0;
+                requireActivity().getSupportFragmentManager().beginTransaction()
+                        .replace(R.id.container, new DeveloperFragment())
+                        .addToBackStack(null)
+                        .commit();
+                Toast.makeText(requireContext(), "Developer Mode Active", Toast.LENGTH_SHORT).show();
             }
         });
+    }
+
+    private void setupRecyclerView() {
+        setupSecretGesture();
+        adapter = new VirtualAppAdapter(virtualApps, new VirtualAppAdapter.OnItemClickListener() {
+            @Override
+            public void onItemClick(VirtualApp app) {
+                BlackBoxCore.get().launchApk(app.getPackageName(), 0);
+            }
+
+            @Override
+            public void onItemLongClick(VirtualApp app) {
+                showAppMenu(app);
+            }
+        });
+        binding.recyclerView.setLayoutManager(new GridLayoutManager(requireContext(), 4));
+        binding.recyclerView.setAdapter(adapter);
+    }
+
+    private void loadVirtualApps() {
+        virtualApps.clear();
+        List<ApplicationInfo> installedApps = BlackBoxCore.get().getInstalledApplications(0, 0);
+        for (ApplicationInfo info : installedApps) {
+            virtualApps.add(new VirtualApp(
+                info.packageName,
+                info.loadLabel(requireContext().getPackageManager()).toString(),
+                info.loadIcon(requireContext().getPackageManager())
+            ));
+        }
+        adapter.notifyDataSetChanged();
+    }
+
+    private void showAppMenu(VirtualApp app) {
+        String[] options = {"Launch", "Clear Data", "Stop", "Uninstall"};
+        new AlertDialog.Builder(requireContext())
+                .setTitle(app.getLabel())
+                .setItems(options, (dialog, which) -> {
+                    switch (which) {
+                        case 0: // Launch
+                            BlackBoxCore.get().launchApk(app.getPackageName(), 0);
+                            break;
+                        case 1: // Clear Data
+                            BlackBoxCore.get().clearPackage(app.getPackageName(), 0);
+                            Toast.makeText(requireContext(), "Data cleared", Toast.LENGTH_SHORT).show();
+                            break;
+                        case 2: // Stop
+                            BlackBoxCore.get().stopPackage(app.getPackageName(), 0);
+                            Toast.makeText(requireContext(), "Stopped", Toast.LENGTH_SHORT).show();
+                            break;
+                        case 3: // Uninstall
+                            BlackBoxCore.get().uninstallPackageAsUser(app.getPackageName(), 0);
+                            loadVirtualApps();
+                            break;
+                    }
+                }).show();
+    }
+
+    private void showInstallDialog() {
+        // Simple implementation: show list of system installed apps to clone
+        List<ApplicationInfo> apps = requireContext().getPackageManager().getInstalledApplications(0);
+        List<String> labels = new ArrayList<>();
+        List<String> packages = new ArrayList<>();
+        
+        for (ApplicationInfo info : apps) {
+            if ((info.flags & ApplicationInfo.FLAG_SYSTEM) == 0) {
+                labels.add(info.loadLabel(requireContext().getPackageManager()).toString());
+                packages.add(info.packageName);
+            }
+        }
+
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Select App to Clone")
+                .setItems(labels.toArray(new String[0]), (dialog, which) -> {
+                    String pkg = packages.get(which);
+                    BlackBoxCore.get().installPackageAsUser(pkg, 0);
+                    loadVirtualApps();
+                    Toast.makeText(requireContext(), "App Cloned", Toast.LENGTH_SHORT).show();
+                }).show();
     }
 
     public static class AboutDialog extends DialogFragment {
@@ -208,12 +186,9 @@ public class HomeFragment extends BaseFragment {
         }
     }
 
-
     private void showAbout() {
-        // Showing the About Dialog
         new AboutDialog().show(getChildFragmentManager(), "about");
     }
-
 
     @Override
     public void onDestroyView() {

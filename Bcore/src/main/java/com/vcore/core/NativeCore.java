@@ -22,9 +22,10 @@ public class NativeCore {
 
         if (!isInjected) {
             Log.i(TAG, "Loading libinject.so from cache directory");
-            if (new File("/data/data/com.reveny.virtualinject/cache/libinject.so").exists()) {
-                Log.i(TAG, "Loading libinject.so from cache directory");
-                System.load("/data/data/com.reveny.virtualinject/cache/libinject.so");
+            File injectLib = new File(BlackBoxCore.getContext().getCacheDir(), "libinject.so");
+            if (injectLib.exists()) {
+                Log.i(TAG, "Loading libinject.so from: " + injectLib.getAbsolutePath());
+                System.load(injectLib.getAbsolutePath());
             } else {
                 Log.e(TAG, "libinject.so not found in cache directory");
             }
